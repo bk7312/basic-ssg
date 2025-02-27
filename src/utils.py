@@ -15,7 +15,7 @@ def split_nodes_delimiter(old_nodes, delimiter, text_type):
         if n.text_type == TextType.TEXT:
             parts = n.text.split(delimiter)
             if len(parts) % 2 != 1:
-                print("invalid parts\n\n", parts)
+                # print("invalid parts\n\n", parts)
                 raise Exception("invalid markdown syntax")
             for i, p in enumerate(parts):
                 if i % 2 == 0:
@@ -85,9 +85,10 @@ def text_to_textnodes(text):
 
 
 def markdown_to_blocks(markdown):
-    lines = markdown.split("\n\n")
-    lines = list(map(lambda x: x.strip(), lines))
-    lines = list(filter(lambda x: x != "", lines))
+    lines = [stripped for line in markdown.split("\n\n") if (stripped := line.strip())]
+    # lines = markdown.split("\n\n")
+    # lines = list(map(lambda x: x.strip(), lines))
+    # lines = list(filter(lambda x: x != "", lines))
     return lines
 
 
@@ -137,7 +138,10 @@ def markdown_to_html_node(markdown):
     children_list = []
     for block in blocks:
         type = block_to_block_type(block)
-        children_list.append(create_html_node(block, type))
+        # print("troubleshoot create html block\n\n", block, type)
+        html_node = create_html_node(block, type)
+        if html_node != None:
+            children_list.append(html_node)
 
     return ParentNode("div", children_list)
 
@@ -147,66 +151,74 @@ def create_html_node(block, type):
         case BlockType.QUOTE:
             # note: bootdev didn't wrap quote with p tag, I prefer with p tag
             quote = block.split("\n")
-            text_nodes = list(map(lambda x: text_to_textnodes(x.split(" ", 1)[1].strip()), quote))
-            leaf_nodes = list(map(lambda x: for_each_text_node_to_html_node(x), text_nodes))
-            children = list(map(lambda x: ParentNode("p", x), leaf_nodes))
+            text_nodes = [text_to_textnodes(q[1].strip()) for x in quote if (q := x.split(" ", 1)) and len(q) > 1]
+            # text_nodes = list(map(lambda x: text_to_textnodes(x.split(" ", 1)[1].strip()), quote))
+            leaf_nodes = [for_each_text_node_to_html_node(x) for x in text_nodes]
+            # leaf_nodes = list(map(lambda x: for_each_text_node_to_html_node(x), text_nodes))
+            children = [ParentNode("p", x) for x in leaf_nodes]
+            # children = list(map(lambda x: ParentNode("p", x), leaf_nodes))
             return ParentNode("blockquote", children)
         
         case BlockType.UNORDERED_LIST:
             li = block.split("\n")
-            text_nodes = list(map(lambda x: text_to_textnodes(x.split(" ", 1)[1]), li))
-            leaf_nodes = list(map(lambda x: for_each_text_node_to_html_node(x), text_nodes))
-            children = list(map(lambda x: ParentNode("li", x), leaf_nodes))
+            text_nodes = [text_to_textnodes(l[1].strip()) for x in li if (l := x.split(" ", 1)) and len(l) > 1]
+            # text_nodes = list(map(lambda x: text_to_textnodes(x.split(" ", 1)[1]), li))
+            leaf_nodes = [for_each_text_node_to_html_node(x) for x in text_nodes]
+            # leaf_nodes = list(map(lambda x: for_each_text_node_to_html_node(x), text_nodes))
+            children = [ParentNode("li", x) for x in leaf_nodes]
+            # children = list(map(lambda x: ParentNode("li", x), leaf_nodes))
             return ParentNode("ul", children)
         
         case BlockType.ORDERED_LIST:
             li = block.split("\n")
-            text_nodes = list(map(lambda x: text_to_textnodes(x.split(". ", 1)[1]), li))
-            leaf_nodes = list(map(lambda x: for_each_text_node_to_html_node(x), text_nodes))
-            children = list(map(lambda x: ParentNode("li", x), leaf_nodes))
+            text_nodes = [text_to_textnodes(l[1].strip()) for x in li if (l := x.split(". ", 1)) and len(l) > 1]
+            # text_nodes = list(map(lambda x: text_to_textnodes(x.split(". ", 1)[1]), li))
+            leaf_nodes = [for_each_text_node_to_html_node(x) for x in text_nodes]
+            # leaf_nodes = list(map(lambda x: for_each_text_node_to_html_node(x), text_nodes))
+            children = [ParentNode("li", x) for x in leaf_nodes]
+            # children = list(map(lambda x: ParentNode("li", x), leaf_nodes))
             return ParentNode("ol", children)
         
         case BlockType.CODE:
             code = block[3:-3]#.split("\n")
-            text_nodes = text_to_textnodes(code)
-            print("code text", text_nodes)
-            leaf_nodes = list(map(lambda x: x.text_node_to_html_node(), text_nodes))
-            print("code leaf", leaf_nodes)
-            # text_nodes = list(map(lambda x: text_to_textnodes(x), code))
-            # leaf_nodes = list(map(lambda x: for_each_text_node_to_html_node(x), text_nodes))
-            # children = list(map(lambda x: ParentNode("code", x), leaf_nodes))
-            children = ParentNode("code", leaf_nodes)
-            print("code children", children)
+            if len(code) == 0:
+                return None
+            # processes the text inside the code block, undesirable
+            # text_nodes = text_to_textnodes(code)
+            # print("code text", text_nodes)
+            # leaf_nodes = list(map(lambda x: x.text_node_to_html_node(), text_nodes))
+            # print("code leaf", leaf_nodes)
+            # children = ParentNode("code", leaf_nodes)
+
+            children = ParentNode("code", [TextNode(code.lstrip("\n"), TextType.TEXT).text_node_to_html_node()])
+            # print("code children", children)
             return ParentNode("pre", [children])
         
         case BlockType.HEADING:
             heading, text = block.split(" ", 1)
             level = len(heading)
             text_nodes = text_to_textnodes(text)
-            children = list(map(lambda x: x.text_node_to_html_node(), text_nodes))
+            children = [x.text_node_to_html_node() for x in text_nodes]
+            # children = list(map(lambda x: x.text_node_to_html_node(), text_nodes))
             return ParentNode(f"h{level}", children)
         
         case BlockType.PARAGRAPH:
-            children = list(map(lambda x: x.text_node_to_html_node(), text_to_textnodes(block)))
+            block = " ".join(block.split("\n")) # combines line break into single paragraph
+            children = [x.text_node_to_html_node() for x in text_to_textnodes(block)]
+            # children = list(map(lambda x: x.text_node_to_html_node(), text_to_textnodes(block)))
             return ParentNode("p", children)
 
 def for_each_text_node_to_html_node(text_nodes):
-    list = []
-    for node in text_nodes:
-        list.append(node.text_node_to_html_node())
-    return list
+    return [node.text_node_to_html_node() for node in text_nodes]
 
-def replace_public_with_static():        
-    clear_public()
+def replace_folder_with_static(folder):        
+    if os.path.exists(folder):
+        shutil.rmtree(folder)
     if not os.path.exists("static"):
         return
-    copy_folder("static", "public")
+    copy_folder("static", folder)
 
-def clear_public():
-    if os.path.exists("public"):
-        shutil.rmtree("public")
-    else:
-        os.mkdir("public")
+    
 
 def copy_folder(src, dest):
     if os.path.isfile(src):
@@ -231,7 +243,7 @@ def extract_title(markdown):
     return splitted[1]
 
 
-def generate_page(from_path, template_path, dest_path):
+def generate_page(from_path, template_path, dest_path, basepath="/"):
     print(f"Generating page from {from_path} to {dest_path} using {template_path}")
 
     f = open(from_path)
@@ -243,19 +255,20 @@ def generate_page(from_path, template_path, dest_path):
 
     nodes = markdown_to_html_node(content)
     # html = list(map(lambda x: x.to_html(), nodes))
-    print("nodes\n\n", nodes)
+    # print("nodes\n\n", nodes)
     html = nodes.to_html()
-    print("htmlnodes\n\n", html)
+    # print("htmlnodes\n\n", html)
     title = extract_title(content)
     with_title = template.replace("{{ Title }}", title)
     with_content = with_title.replace("{{ Content }}", html)
-
+    update_href = with_content.replace('href="/', f'href="{basepath}')
+    update_src = update_href.replace('src="/', f'src="{basepath}')
     o = open(dest_path, "w")
-    o.write(with_content)
+    o.write(update_src)
     o.close()
 
 
-def generate_pages_recursive(dir_path_content, template_path, dest_dir_path):
+def generate_pages_recursive(dir_path_content, template_path, dest_dir_path, basepath="/"):
     files = os.listdir(dir_path_content)
     if not os.path.exists(dest_dir_path):
         os.mkdir(dest_dir_path)
@@ -266,7 +279,7 @@ def generate_pages_recursive(dir_path_content, template_path, dest_dir_path):
             if file.endswith(".md"):
                 print("generating file", content_path)
                 html_filename = file[:-3] + ".html"
-                generate_page(content_path, template_path, os.path.join(dest_dir_path, html_filename))
+                generate_page(content_path, template_path, os.path.join(dest_dir_path, html_filename), basepath)
         else:
-            generate_pages_recursive(content_path, template_path, dest_path)
+            generate_pages_recursive(content_path, template_path, dest_path, basepath)
 
